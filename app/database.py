@@ -1,35 +1,25 @@
-from urllib.parse import quote_plus # Add this import
-from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
-from sqlalchemy.orm import DeclarativeBase
+import os
+from dotenv import load_dotenv
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
+from sqlalchemy.orm import declarative_base
 
-# 1. Store your raw password here
-raw_password = "Joleia#1273" 
+# 1. Load the .env file
+load_dotenv()
 
-# 2. Encode it (this turns the '#' into '%23')
-safe_password = quote_plus(raw_password)
+# 2. Get the URL
+DATABASE_URL = os.getenv("DATABASE_URL", "")
 
-# 3. Use the safe_password in the URL
-DATABASE_URL = f"postgresql+asyncpg://postgres:{safe_password}@localhost:5432/carbon_tracker_db"
-
+# 3. Create the engine
+# Note: If DATABASE_URL is None, this will show an error. 
+# Make sure your .env file is in the root folder!
 engine = create_async_engine(DATABASE_URL, echo=True)
 
-from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
-from sqlalchemy.orm import DeclarativeBase
+# 4. Setup the session maker
+AsyncSessionLocal = async_sessionmaker(
+    bind=engine,
+    class_=AsyncSession,
+    expire_on_commit=False
+)
 
-# REPLACE 'your_password' with the password you chose during installation
-DATABASE_URL = "postgresql+asyncpg://postgres:Joleia#1273@localhost:5432/carbon_tracker_db"
-
-# This engine handles the actual connection
-engine = create_async_engine(DATABASE_URL, echo=True)
-
-# This creates 'sessions' (temporary connections for each API request)
-AsyncSessionLocal = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
-
-# This is the base class our tables will inherit from
-class Base(DeclarativeBase):
-    pass
-
-# This is a 'Dependency' - it gives our API routes access to the DB
-async def get_db():
-    async with AsyncSessionLocal() as session:
-        yield session
+# 5. Define Base
+Base = declarative_base()
