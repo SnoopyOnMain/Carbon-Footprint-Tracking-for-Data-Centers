@@ -1,11 +1,10 @@
 fastapi
 uvicorn
 sqlalchemy
-asyncpg
-scikit-learn
-pandas
-python-dotenv
-requests
-streamlit
-nest_asyncio
 psycopg2-binary
+asyncpg
+pandas
+streamlit
+requests
+scikit-learn
+python-dotenv
