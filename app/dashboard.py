@@ -1,48 +1,56 @@
-# app/dashboard.py
-import asyncio
-from sqlalchemy import select
-from app.database import AsyncSessionLocal
-from app.models import ComputeLog, Hardware 
+import streamlit as st
+import pandas as pd
+from sqlalchemy import create_engine
+import requests
 
-async def get_job_summary(target_job_id: str):
-    async with AsyncSessionLocal() as session:
-        query = (
-            select(ComputeLog, Hardware)
-            .join(Hardware, ComputeLog.hardware_id == Hardware.hardware_id)
-            .where(ComputeLog.job_id == target_job_id)
-        )
-        
-        result = await session.execute(query)
-        rows = result.all()
+st.set_page_config(page_title="Carbon Audit Dashboard", layout="wide")
+st.title("Real-Time Green AI Audit")
 
-        if not rows:
-            print(f"No data found for Job ID: {target_job_id}")
-            return
+# --- SYNC CONNECTION (Fixes the "Operation in Progress" Error) ---
+# We use the standard postgresql driver (no +asyncpg)
+DB_URL = "postgresql://postgres:Joleia#1273@db:5432/carbon_tracker_db"
+engine = create_engine(DB_URL)
 
-        # Use row[0] for the log data and row[1] for hardware info
-        _, hw_info = rows[0]
-        
-        # 1. Calculate energy first
-        # We use float() just to be 100% sure Python doesn't treat it as an object
-        total_watts = sum(float(row[0].power_draw_watts) for row in rows)
-        total_kwh = (total_watts / 3600) / 1000
-        
-        # 2. Calculate cost and carbon
-        electricity_rate = 0.16 
-        total_cost = float(total_kwh) * electricity_rate
-        carbon_footprint = float(total_kwh) * 0.4
-        
-        # 3. Print the final report
-        print(f"\n--- CARBON & COST REPORT ---")
-        print(f"Job ID: {target_job_id}")
-        print(f"Hardware: {hw_info.name} ({hw_info.type})")
-        print(f"Total Logs: {len(rows)}")
-        print(f"Total Energy: {total_kwh:.6f} kWh")
-        print(f"Estimated Cost: ${total_cost:.6f}") # Changed to .6f to see small values!
-        print(f"CO2 Emissions: {carbon_footprint:.6f} kg")
-        print(f"-----------------------------\n")
+def get_dashboard_data():
+    # We use LEFT JOIN so we don't hide logs that are missing hardware metadata
+    query = """
+    SELECT l.timestamp, l.power_draw_watts, COALESCE(h.name, 'Unknown Hardware') as name
+    FROM fact_compute_logs l
+    LEFT JOIN dim_hardware h ON l.hardware_id = h.hardware_id
+    ORDER BY l.timestamp DESC
+    """
+    return pd.read_sql(query, engine)
 
-if __name__ == "__main__":
-    # Ensure this matches a Job ID currently in your pgAdmin
-    job_to_check = "8efe9c45" 
-    asyncio.run(get_job_summary(job_to_check))
+# --- Sidebar: ML Prediction ---
+st.sidebar.header("ML Carbon Predictor")
+mins = st.sidebar.number_input("Estimated Minutes", 1, 500, 60)
+if st.sidebar.button("Predict"):
+    try:
+        res = requests.get(f"http://web:8000/predict/{mins}").json()
+        st.sidebar.metric("Predicted CO2", f"{res['predicted_co2_kg']} kg")
+    except Exception as e:
+        st.sidebar.error("API not reachable")
+
+# --- Main UI ---
+try:
+    df = get_dashboard_data()
+    
+    if not df.empty:
+        # 1. Metrics
+        col1, col2 = st.columns(2)
+        total_kwh = (df['power_draw_watts'].sum() / 3600) / 1000
+        col1.metric("Total Energy Use", f"{total_kwh:.4f} kWh")
+        col2.metric("CO2 Produced", f"{(total_kwh * 0.4):.4f} kg")
+
+        # 2. Charts
+        st.write("### Power Consumption Over Time (Watts)")
+        st.line_chart(df.set_index('timestamp')['power_draw_watts'])
+        
+        # 3. Raw Data
+        st.write("### Telemetry Logs")
+        st.dataframe(df)
+    else:
+        st.info("Connected to DB, but no logs found. Run your test_emitter.py!")
+
+except Exception as e:
+    st.error(f"Waiting for database... {e}")

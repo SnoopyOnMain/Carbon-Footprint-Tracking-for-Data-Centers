@@ -22,5 +22,18 @@ services:
     depends_on:
       - db
 
+  dashboard:
+      build: .
+      command: streamlit run app/dashboard.py --server.port=8501 --server.address=0.0.0.0
+      ports:
+        - "8501:8501"
+      environment:
+        - PYTHONPATH=/code  # <--- This tells Python to look in the root folder
+      env_file:
+        - .env
+      depends_on:
+        - web
+        - db
+
 volumes:
   postgres_data:
