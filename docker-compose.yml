@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   db:
     image: postgres:17
@@ -23,17 +21,27 @@ services:
       - db
 
   dashboard:
-      build: .
-      command: streamlit run app/dashboard.py --server.port=8501 --server.address=0.0.0.0
-      ports:
-        - "8501:8501"
-      environment:
-        - PYTHONPATH=/code  # <--- This tells Python to look in the root folder
-      env_file:
-        - .env
-      depends_on:
-        - web
-        - db
+    build: .
+    command: streamlit run app/dashboard.py --server.port=8501 --server.address=0.0.0.0
+    ports:
+      - "8501:8501"
+    environment:
+      - PYTHONPATH=/code
+    env_file:
+      - .env
+    depends_on:
+      - web
+      - db
+
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:v2.11.3
+    container_name: mlflow_tracker
+    ports:
+      - "5000:5000"
+    volumes:
+      - mlflow_data:/mlflow
+    command: mlflow server --host 0.0.0.0 --port 5000 --backend-store-uri sqlite:///mlflow.db --default-artifact-root /mlflow
 
 volumes:
   postgres_data:
+  mlflow_data:

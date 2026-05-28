@@ -9,7 +9,7 @@ def run_test():
     payload = {
         "job_id": job_id, 
         "hardware_id": 1, 
-        "power_draw_watts": 300.0  # Try changing this to see the graph jump!
+        "power_draw_watts": 700.0  # Try changing this to see the graph jump!
     }
 
     try:
